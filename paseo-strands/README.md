@@ -4,30 +4,10 @@ Adds the AWS Strands agent to Paseo over ACP.
 
 ## The plugin
 
-`index.server.ts`, in full:
-
-```ts
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { runAcpProvider } from "@getpaseo/plugin/server/acp";
-
-// strands strips credentials from its config.json; this env file is where they live.
-const envFile = join(homedir(), ".strands", "cli", ".env");
-
-export default function contribute(server: PluginServerContext) {
-  server.registerProvider(
-    runAcpProvider({
-      id: "strands",
-      label: "AWS Strands",
-      icon: "strands.svg",
-      command: ["strands", "--acp-server", ...(existsSync(envFile) ? ["--env-file", envFile] : [])],
-    }),
-  );
-  return () => {};
-}
-```
+`index.server.ts` is one `runAcpProvider` call: it spawns
+`strands --acp-server --model litellm/stealth/space-bunny-alpha`, adds
+`--env-file ~/.strands/cli/.env` when that file exists, and uses a `discover` /
+`configure` transformer to give Paseo's model picker the pinned model.
 
 Paseo spawns the process and speaks Agent Client Protocol to it. No Strands
 code is imported, so Paseo's plugin build never walks the Strands type graph
@@ -58,15 +38,13 @@ npm install -g @strands-agents/cli
 
 ## Model
 
-The plugin passes no model. `strands` resolves one from its own config at
-`~/.strands/cli/config.json`, so changing it there changes every Paseo agent
-and the CLI TUI alike:
+Pinned to OpenRouter's `stealth/space-bunny-alpha` (1M context) through
+`--model litellm/stealth/space-bunny-alpha`. This flag overrides
+`profile.model` in `~/.strands/cli/config.json`. The config still supplies the
+provider and base URL:
 
 ```json
 {
-  "profile": {
-    "model": "litellm/stealth/space-bunny-alpha"
-  },
   "providers": {
     "enabled": ["litellm"],
     "environment": {
@@ -75,6 +53,14 @@ and the CLI TUI alike:
   }
 }
 ```
+
+The strands ACP server returns only a `sessionId` from `session/new`. It sends
+no `models` and no `configOptions`, and it has no set-model method. Paseo
+therefore has nothing to list and its model picker stays empty. The plugin's
+`discover` transformer advertises the pinned model as the only, default entry.
+`configure` accepts selecting that model and passes every other change to the
+bridge. To change models, edit `model` in `index.server.ts` and run
+`paseo plugin reload paseo-strands`.
 
 ## Credentials
 
