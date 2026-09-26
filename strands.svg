@@ -1,5 +1,5 @@
 <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g transform="translate(2 2)" fill="#8f8f8f" stroke="#8f8f8f" stroke-width="0.9" stroke-linejoin="miter">
+<g transform="translate(2 2)" fill="currentColor" stroke="currentColor" stroke-width="0.9" stroke-linejoin="miter">
 <path d="M32 15.2402H30.48V25.9102H32V15.2402Z"/>
 <path d="M30.4802 25.9102H28.9502V27.4302H30.4802V25.9102Z"/>
 <path d="M30.4802 12.1899H28.9502V15.2399H30.4802V12.1899Z"/>
