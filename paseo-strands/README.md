@@ -1,71 +1,116 @@
 # paseo-strands
 
-A Paseo plugin that runs an AWS Strands harness agent and posts its answer back into the
-invoking Paseo agent's conversation.
+Adds the AWS Strands agent to Paseo over ACP.
 
-`/strands <prompt>` → RPC `strands.run` → `createHarness()` → `agent.invoke()` →
-`paseo.agents.ref(agentId).send(text)`.
+## The plugin
 
-The integration is public API on both sides: `createHarness` from `@strands-agents/harness`,
-and `PaseoAgentHandle.send` from `@getpaseo/client`. No Strands SDK modification, no custom
-sub-shell runner, no PTY — Strands runs in-process inside Paseo's daemon subprocess.
-
-## Status: install is blocked upstream
-
-`paseo plugin install` fails. The source, typecheck, and test all pass; the failure is in
-Paseo's install-time type-boundary check.
-
-`@strands-agents/harness@0.1.1` pins `@anthropic-ai/sdk@^0.109.1` as a `peerOptional`.
-That version's `internal/types.d.mts` declares a `NotAny<import(...)>` union over seven
-speculative relative paths for `undici-types` and seven for `undici`:
+`index.server.ts`, in full:
 
 ```ts
-NotAny<import("../../../node_modules/undici-types/index.d.ts.mjs").RequestInit> | ...
+import type { PluginServerContext } from "@getpaseo/plugin/server";
+import { runAcpProvider } from "@getpaseo/plugin/server/acp";
+
+export default function contribute(server: PluginServerContext) {
+  server.registerProvider(
+    runAcpProvider({
+      id: "strands",
+      label: "AWS Strands",
+      icon: "strands.svg",
+      command: ["strands", "--acp-server", "--model", "litellm/stealth/space-bunny-alpha"],
+    }),
+  );
+  return () => {};
+}
 ```
 
-Neither package ships `index.d.ts.mjs` — they ship `index.d.ts`. Those specifiers are
-therefore unresolvable for any consumer on any npm layout. Paseo's
-`paseo-plugin-server-runtime-boundary` esbuild plugin walks the type graph and fails on the
-first one it cannot resolve:
+Paseo spawns the process and speaks Agent Client Protocol to it. No Strands
+code is imported, so Paseo's plugin build never walks the Strands type graph
+and the harness's dependencies stay out of the daemon.
 
-```
-Could not resolve type dependency "../../../node_modules/undici-types/index.d.ts.mjs"
-imported by node_modules/@anthropic-ai/sdk/internal/types.d.mts
-```
+## Icon
 
-Only `0.109.0` and `0.109.1` exist in the allowed range, so there is no version to upgrade to.
-The `NotAny<T>` wrapper means the file contents are irrelevant — the stubs only need to exist.
+`strands.svg` is `site/public/favicon.svg` from
+[strands-agents/harness-sdk](https://github.com/strands-agents/harness-sdk) —
+the only square mark the project ships. Self-contained: 39 paths, one colour, no
+external references, no fixed dimensions. That is what Paseo's `icon` field
+asks for, a plugin-directory-relative path to a self-contained SVG.
 
-Fixes, in order of preference:
+The other candidates were wrong shape for a square slot — `logo-light.svg` and
+`logo-dark.svg` are 290×463 vertical lockups, and the two wordmarks are
+1332 and 1512 units wide. This favicon is the squarified, pixel-styled variant
+they made for small sizes.
 
-1. **Upstream** — `strands-agents/harness-sdk` widens its `@anthropic-ai/sdk` peer range, or
-   `@anthropic-ai/sdk` stops emitting those speculative relative specifiers. Neither is in this repo.
-2. **Node_modules stub** — a `build` step that writes empty `index.d.ts.mjs` files at all 14
-   paths. Rejected for now: the seven depths reach `/node_modules` and `/home/node_modules`,
-   outside this repo, and the step would re-run on every `paseo plugin install`/`update`.
-3. **Drop the harness package** — build from `Agent` plus the harness's individual public tool
-   factories (`read`, `write`, `edit`, `makeShell`, `makeSubagent`). Costs ~25-40 more lines
-   and gives up the harness's benchmarked defaults for tools, context, sessions, memory, and hooks.
+Apache-2.0, © Amazon.com, Inc. or its affiliates. The mark is an Amazon
+trademark; using it here identifies the product this plugin drives. Apache-2.0
+§4(d) asks that the `NOTICE` attribution travel with redistributions.
 
 ## Requirements
 
-- Paseo `>=0.9.0`, with the global `pluginsEnabled` switch on.
-- Model credentials on the **daemon** machine. The harness defaults to
-  `bedrock/global.anthropic.claude-opus-5`; override with `/strands` on a Bedrock default, or
-  change the default in `index.server.ts`. Without credentials `invoke` throws and the RPC
-  rejects — the handler deliberately does not catch, so Paseo shows the error rather than
-  posting a blank turn.
-
-## Side effects
-
-`session: false` is set, so runs are not snapshotted. The harness's `memory` and `skills`
-defaults are left on, which writes markdown under `./.agent/memory` in the daemon's cwd and
-picks up `./.agent/skills` if present. The Paseo agent is already the conversation of record;
-pass `memory: false, skills: false` in `createHarness` for a side-effect-free daemon.
-
-## Verify
-
-```bash
-npm run typecheck                 # exit 0
-node --test test_contract.test.mjs # 1 pass, 0 fail
+```sh
+npm install -g @strands-agents/cli
 ```
+
+## Model
+
+The model is a `--model provider/model` argument, not a saved profile. The
+`litellm` provider is the OpenAI-compatible path, so it points at OpenRouter
+through the environment:
+
+| Variable | Value |
+| --- | --- |
+| `LITELLM_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `LITELLM_API_KEY` | your OpenRouter key |
+
+Set both on the agent rather than in your shell — Paseo's
+`ProviderSessionConfig.env` is passed straight to the spawned process, so the
+key stays out of the daemon environment and out of the plugin.
+
+## Install
+
+From a local checkout, use an **absolute** path — a relative path is parsed as a
+Git source:
+
+```sh
+paseo plugin install /absolute/path/to/paseo-strands
+```
+
+From GitHub, no registry registration is needed:
+
+```sh
+paseo plugin install https://github.com/you/paseo-aws-strands
+```
+
+## Use
+
+```sh
+paseo run --provider strands \
+  --env LITELLM_BASE_URL=https://openrouter.ai/api/v1 \
+  --env LITELLM_API_KEY="$OPENROUTER_KEY" \
+  "your task"
+```
+
+Or pick **AWS Strands** when creating an agent in the Paseo UI and set the two
+variables there.
+
+## Tool surface
+
+The harness ships `shell`, `read`, `write`, `edit`, `web_fetch`, and `subagent`
+enabled by default, and ACP-server mode never prompts before running them. A
+Strands session can write files and run commands in the session's working
+directory without asking. Give it a directory you are willing to let an agent
+modify.
+
+To narrow it, add `--builtin-tools` to the command tuple, for example
+`"--builtin-tools", "read,write"`.
+
+The CLI also writes `.agent/sessions/<id>/` into whatever working directory the
+session runs in, so each agent leaves a `.agent/` directory behind. Add
+`"--session", "off"` to the command tuple to stop that, or gitignore
+`.agent/`.
+
+## Known wart
+
+Paseo gives a closing ACP process 1s to answer `SIGTERM` and 1s more to answer
+`SIGKILL`, then reports `ACP provider strands did not terminate after SIGKILL`
+and fails operations like `paseo archive`. The process does exit — the check
+just gives up first. Expect that error on teardown; it does not leave orphans.

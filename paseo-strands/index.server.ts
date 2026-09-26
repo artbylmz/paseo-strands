@@ -1,19 +1,14 @@
-import { createHarness } from "@strands-agents/harness";
-import type { RpcInput } from "@getpaseo/plugin";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { strandsRun } from "./shared/strands";
+import { runAcpProvider } from "@getpaseo/plugin/server/acp";
 
 export default function contribute(server: PluginServerContext) {
-  server.handle(
-    strandsRun,
-    async ({ agentId, prompt, model }: RpcInput<typeof strandsRun>, { paseo }) => {
-      const agent = await createHarness({ ...(model ? { model } : {}), session: false });
-      const text = (await agent.invoke(prompt)).lastMessage.content
-        .flatMap((b) => (b.type === "textBlock" ? [b.text] : []))
-        .join("");
-      await paseo.agents.ref(agentId).send(text);
-      return { text };
-    },
+  server.registerProvider(
+    runAcpProvider({
+      id: "strands",
+      label: "AWS Strands",
+      icon: "strands.svg",
+      command: ["strands", "--acp-server", "--model", "litellm/stealth/space-bunny-alpha"],
+    }),
   );
   return () => {};
 }
