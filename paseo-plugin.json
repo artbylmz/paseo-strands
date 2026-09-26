@@ -1,6 +1,6 @@
 {
   "id": "paseo-strands",
-  "description": "Add the AWS Strands agent to Paseo over ACP",
+  "description": "Run the AWS Strands agent in Paseo over ACP",
   "requirements": {
     "paseo": ">=0.9.0"
   }

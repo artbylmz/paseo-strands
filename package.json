@@ -1,0 +1,31 @@
+{
+  "name": "paseo-strands",
+  "version": "0.1.0",
+  "description": "Paseo plugin that runs the AWS Strands agent over ACP",
+  "keywords": ["paseo", "paseo-plugin", "strands", "aws", "acp", "agent"],
+  "license": "Apache-2.0",
+  "author": "artbylmz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/artbylmz/paseo-strands.git"
+  },
+  "bugs": "https://github.com/artbylmz/paseo-strands/issues",
+  "homepage": "https://github.com/artbylmz/paseo-strands#readme",
+  "type": "module",
+  "files": [
+    "paseo-plugin.json",
+    "index.server.ts",
+    "strands.svg",
+    "NOTICE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck"
+  },
+  "devDependencies": {
+    "@getpaseo/plugin": "^0.9.2",
+    "@types/node": "^24.19.0",
+    "typescript": "^5.9.0"
+  }
+}
