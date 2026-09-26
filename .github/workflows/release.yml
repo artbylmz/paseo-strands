@@ -1,0 +1,43 @@
+name: Release
+
+# The version in package.json is the source of truth. A push to main that
+# carries an unreleased version tags it and opens a GitHub Release; a push
+# that does not bump the version is a no-op.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Typecheck
+        run: npm ci && npm run typecheck
+
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ steps.pkg.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::$tag is already released"
+            exit 0
+          fi
+          gh release create "$tag" \
+            --title "$tag" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --latest
